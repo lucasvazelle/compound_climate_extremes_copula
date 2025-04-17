@@ -1,7 +1,0 @@
-xarray==2024.7.0
-pandas
-scipy
-seaborn
-copulae
-copulas
-netcdf4

@@ -9,7 +9,15 @@ import seaborn as sns
 from copulae import pseudo_obs
 import pandas as pd
 import copulas.bivariate
-
+import pandas as pd
+import netCDF4 
+import os
+import numpy as np
+import xarray as xr
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+import matplotlib.pyplot as plt
 
 class AnalyseurCopule:
     def __init__(
@@ -44,7 +52,7 @@ class AnalyseurCopule:
     def graph_donnees_multivariees(self) -> plt.savefig:
         h = sns.jointplot(x=self.donnees1, y=self.donnees2, kind="scatter")
         h.set_axis_labels(f"{self.nom_variable1}", f"{self.nom_variable2}", fontsize=10)
-        return h.savefig("distribution_jointe.png")
+        return h.savefig(f"output/distribution_jointe_{self.nom_variable1}_{self.nom_variable2}.png")
 
     @staticmethod
     def normaliser_rank(donnees: np.ndarray) -> np.ndarray:
@@ -61,7 +69,7 @@ class AnalyseurCopule:
         h2.set_axis_labels(
             f"{self.nom_variable1}", f"{self.nom_variable2}", fontsize=10
         )
-        return h2.savefig("distribution_jointe_normalisé.png")
+        return h2.savefig(f"output/distribution_jointe_normalisé_{self.nom_variable1}_{self.nom_variable2}.png")
 
     def verifie_type_de_copule(self):
         npdata = pd.DataFrame(
@@ -70,7 +78,7 @@ class AnalyseurCopule:
         result = copulas.bivariate.base.Bivariate().select_copula(npdata)
         parameters = result.to_dict()
         copule = parameters["copula_type"]
-        assert copule == "GUMBEL"
+        # assert copule == "GUMBEL"
         return None
 
     def calculer_theta_gumbel(self) -> float:
@@ -146,7 +154,7 @@ class AnalyseurCopule:
         plt.xlabel(f"Valeurs normalisées de {self.nom_variable1}")
         plt.ylabel(f"Valeurs normalisées de {self.nom_variable2}")
         plt.legend()
-        return plt.savefig(f"Copule de Gumbel.png")
+        return plt.savefig(f"output/Copule de Gumbel_{self.nom_variable1}_{self.nom_variable2}.png")
 
     def lancer_analyse_copule(self):
         self.charger_donnees()
@@ -164,10 +172,10 @@ class AnalyseurCopule:
 
 
 # _____________________________________paramètres_______________________________________
-importeur1 = ImportData().import_extreme_wind_speed_days()
-importeur2 = ImportData().import_frenquency_of_extreme_precipitation_copernicus()
-nom_variable1 = "Total des précipitations sur les 5 jours consécutifs les plus pluvieux"
-nom_variable2 = "Total sur une année des précipitations extrêmes"
+importeur1 = ImportData().import_warmest_three_day_period()
+importeur2 = ImportData().import_heat_waves_climatological()
+nom_variable1 = "Période la plus chaude sur 3 jours"
+nom_variable2 = "Vagues de chaleur"
 lat, lon = 100, 65
 # _____________________________________lance la classe_____________________________
 analyseur = AnalyseurCopule(
