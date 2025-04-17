@@ -12,12 +12,6 @@ import copulas.bivariate
 import pandas as pd
 import netCDF4 
 import os
-import numpy as np
-import xarray as xr
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
-import matplotlib.pyplot as plt
 
 class AnalyseurCopule:
     def __init__(
