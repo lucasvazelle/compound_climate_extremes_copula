@@ -6,3 +6,6 @@ matplotlib
 numpy
 copulas
 copulae
+streamlit
+dash
+dash_bootstrap_compenents
