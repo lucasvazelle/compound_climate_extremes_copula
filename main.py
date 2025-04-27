@@ -49,7 +49,7 @@ class AnalyseurCopule:
     def graph_donnees_multivariees(self) -> plt.savefig:
         h = sns.jointplot(x=self.donnees1, y=self.donnees2, kind="scatter")
         h.set_axis_labels(f"{self.nom_variable1}", f"{self.nom_variable2}", fontsize=10)
-        return h.savefig(f"output/distribution_jointe_{self.nom_variable1}_{self.nom_variable2}.png")
+        return h.savefig(f"output/distribution_jointe_{self.nom_variable1}_{self.nom_variable2}_lat{self.lat}_lon{self.lon}.png")
 
     @staticmethod
     def normaliser_rank(donnees: np.ndarray) -> np.ndarray:
@@ -66,7 +66,7 @@ class AnalyseurCopule:
         h2.set_axis_labels(
             f"{self.nom_variable1}", f"{self.nom_variable2}", fontsize=10
         )
-        return h2.savefig(f"output/distribution_jointe_normalisé_{self.nom_variable1}_{self.nom_variable2}.png")
+        return h2.savefig(f"output/distribution_jointe_normalisé_{self.nom_variable1}_{self.nom_variable2}_lat{self.lat}_lon{self.lon}.png")
 
     def verifie_type_de_copule(self):
         npdata = pd.DataFrame(
@@ -158,7 +158,7 @@ class AnalyseurCopule:
         plt.xlabel(f"Valeurs normalisées de {self.nom_variable1}")
         plt.ylabel(f"Valeurs normalisées de {self.nom_variable2}")
         plt.legend()
-        return plt.savefig(f"output/Copule_{self.nom_copule}_{self.nom_variable1}_{self.nom_variable2}.png")
+        return plt.savefig(f"output/Copule_{self.nom_copule}_{self.nom_variable1}_{self.nom_variable2}_lat{self.lat}_lon{self.lon}.png")
 
     def lancer_analyse_copule(self):
         self.charger_donnees()
@@ -178,11 +178,12 @@ class AnalyseurCopule:
 
 
 # _____________________________________paramètres_______________________________________
-importeur1 = ImportData().import_extreme_wind_speed_days()
-importeur2 = ImportData().import_heat_waves_climatological()
-nom_variable1 = "Vents extrêmes"
-nom_variable2 = "Vagues de chaleur"
-lat, lon = 100, 65
+importeur1 = ImportData().import_dry()
+importeur2 = ImportData().import_wind()
+nom_variable1 = "dry"
+nom_variable2 = "wind"
+lat, lon = 26, 36
+
 # _____________________________________lance la classe_____________________________
 analyseur = AnalyseurCopule(
     importeur1, importeur2, nom_variable1, nom_variable2, lat, lon
