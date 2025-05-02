@@ -1,197 +1,130 @@
 import streamlit as st
 import pydeck as pdk
-import xarray as xr
-import os
 import numpy as np
 import pandas as pd
+import xarray as xr
+from import_data import ImportData
 
-# Fonction pour charger un fichier NetCDF
-def load_netcdf_data(nc_file):
-    return xr.open_dataset(nc_file, engine="netcdf4")
+# --- Charger et préparer ds_all ---
+importer = ImportData()
+ds_rh   = importer.import_relative_humidity()
+ds_temp = importer.import_temperature()
+ds_u    = importer.import_u_wind()
+ds_v    = importer.import_v_wind()
 
-# Fonction pour charger tous les fichiers NetCDF d'un répertoire (et de ses sous-répertoires)
-def load_all_netcdf_files(directory):
-    datasets = []
-    filenames = []
-    seen_files = set()  # Pour suivre les fichiers déjà rencontrés
-    
-    # Parcours récursif du répertoire et de ses sous-répertoires
-    for root, dirs, files in os.walk(directory):
-        for filename in files:
-            # Vérifier si le fichier est un fichier NetCDF (.nc)
-            if filename.endswith(".nc"):
-                file_path = os.path.join(root, filename)
-                
-                # Si le fichier n'a pas déjà été rencontré, le traiter
-                if file_path not in seen_files:
-                    seen_files.add(file_path)
-                    
-                    # Tenter de charger le fichier NetCDF
-                    dataset = load_netcdf_data(file_path)
-                    if dataset is not None:  # Si le fichier est chargé avec succès
-                        datasets.append(dataset)
-                        filenames.append(file_path)  # Ajouter le chemin complet du fichier
+# Sélection au niveau 1000 hPa et renommage
+dry_da = ds_rh["r"].rename("dry")
+hot_da = ds_temp["t"].rename("hot")
+hot_da = hot_da - 273.15  # Kelvin -> °C
 
-    return datasets, filenames
+u_da = ds_u["u"]
+v_da = ds_v["v"]
+wind_da = np.sqrt(u_da**2 + v_da**2).rename("wind")  # module du vent
 
-# Fonction pour extraire un titre pertinent basé sur le nom du fichier
-def extract_title(filename):
-    start = filename.find("_") + 1
-    end = filename.find("-", start)
-    return filename[start:end].replace("_", " ").capitalize()
+# Fusion en un seul Dataset
+ds_all = xr.merge([dry_da, hot_da, wind_da])
 
-# Fonction pour sélectionner le dégradé de couleur en fonction du nom de fichier
-def select_theme(filename):
-    filename = filename.lower()
-    if "frost" in filename or "precipitation" in filename :
-        # Dégradé progressif du bleu clair au bleu foncé
-        return [
-            [173, 216, 230, 50],  # Light blue with lower opacity
-            [135, 206, 235, 100],
-            [0, 191, 255, 150],
-            [30, 144, 255, 200],
-            [0, 0, 255, 220],     # Medium blue
-            [0, 0, 139, 255],     # Dark blue
-        ]
-    elif "hot" in filename or "temperature" in filename or "drought" in filename:
-        # Dégradé progressif du rouge clair au rouge foncé
-        return [
-            [255, 182, 193, 50],  # Light pink with lower opacity
-            [255, 99, 71, 100],
-            [255, 69, 0, 150],
-            [255, 0, 0, 200],
-            [178, 34, 34, 220],   # Medium red
-            [139, 0, 0, 255],     # Dark red
-        ]
-    elif "wind" or "dry" in filename:
-        # Dégradé progressif du vert clair au bleu-vert foncé
-        return [
-            [144, 238, 144, 50],  # Light green with lower opacity
-            [60, 179, 113, 100],
-            [32, 178, 170, 150],
-            [0, 128, 128, 200],
-            [0, 100, 0, 220],     # Medium green
-            [0, 128, 255, 255],   # Dark blue-green
-        ]
-    else:
-        # Thème par défaut rouge
-        return [
-            [255, 182, 193, 50],  # Light pink with lower opacity
-            [255, 99, 71, 100],
-            [255, 69, 0, 150],
-            [255, 0, 0, 200],
-            [178, 34, 34, 220],   # Medium red
-            [139, 0, 0, 255],     # Dark red
-        ]
+# Calcul de l'indicateur HDW (Heat-Dry-Wind)
+hdw = xr.where(
+    (ds_all['hot'] > 35) &
+    (ds_all['dry'] < 30) &
+    (ds_all['wind'] >= 7),
+    1, 0
+).rename('HDW')
 
-# Fonction pour calculer le quintile d'une valeur donnée
-def get_value_and_risk(ds, latitude, longitude, year):
-    # Récupérer la première variable du Dataset
-    premiere_variable = list(ds.data_vars)[0]
-    
-    # Extraire la valeur pour le point spécifié
-    valeur = ds[premiere_variable].sel(lat=latitude, lon=longitude, time=str(year), method="nearest").values
-    
-    # Calculer les quintiles pour déterminer le risque
-    all_values = ds[premiere_variable].sel(time=str(year)).values.flatten()
-    quintiles = np.nanpercentile(all_values, [20, 40, 60, 80])
-    
-    # Déterminer le niveau de risque en fonction de la valeur
-    if valeur <= quintiles[0]:
-        risk_level = 1
-    elif valeur <= quintiles[1]:
-        risk_level = 2
-    elif valeur <= quintiles[2]:
-        risk_level = 3
-    elif valeur <= quintiles[3]:
-        risk_level = 4
-    else:
-        risk_level = 5
-    
-    return valeur, risk_level
+# Titre de l'application
+st.title("Carte journalière des indicateurs et HDW")
 
-# Dossier contenant les fichiers NetCDF
-directory = "./"
-all_datasets, all_filenames = load_all_netcdf_files(directory)
+# Sélection de la date
+min_date = pd.to_datetime(str(ds_all['valid_time'].min().values))
+max_date = pd.to_datetime(str(ds_all['valid_time'].max().values))
+selected_date = st.date_input(
+    "Choisissez une date", 
+    value=min_date.date(), 
+    min_value=min_date.date(), 
+    max_value=max_date.date()
+)
+sel = np.datetime64(selected_date)
 
-st.title("Cartes des indicateurs climatiques")
+# Choix de l'indicateur à afficher
+var_sel = st.selectbox("Choisir un indicateur", ['dry', 'hot', 'wind'], index=1)
 
-# Sélection de l'année avec un slider
-year = st.slider("Sélectionnez l'année", min_value=1979, max_value=2023, step=1, value =2023)
+# Extraire les données pour la date sélectionnée
+selected_da = ds_all.sel(valid_time=sel)
 
-# Entrée utilisateur pour la latitude et la longitude
-latitude = st.number_input("Entrez la latitude", value=50.0)
-longitude = st.number_input("Entrez la longitude", value=2.0)
+df = selected_da[var_sel].to_dataframe().reset_index().dropna(subset=[var_sel])
 
-tabs = st.tabs([extract_title(filename) for filename in all_filenames])
+# Définir une palette simple
+palettes = {
+    'dry': [[144, 238, 144, 50], [60, 179, 113, 100], [32, 178, 170, 150], [0, 128, 128, 200], [0, 100, 0, 220], [0, 128, 255, 255]],
+    'hot': [[255, 182, 193, 50], [255, 99, 71, 100], [255, 69, 0, 150], [255, 0, 0, 200], [178, 34, 34, 220], [139, 0, 0, 255]],
+    'wind': [[173, 216, 230, 50], [135, 206, 235, 100], [0, 191, 255, 150], [30, 144, 255, 200], [0, 0, 255, 220], [0, 0, 139, 255]]
+}
 
-for i, (ds, filename) in enumerate(zip(all_datasets, all_filenames)):
-    with tabs[i]:
-        valeur, risk_level = get_value_and_risk(ds, latitude, longitude, year)
+# Heatmap layer for selected indicator
+layer_heat = pdk.Layer(
+    'HeatmapLayer',
+    data=df,
+    get_position=['longitude', 'latitude'],  # correct order lon, lat
+    get_weight=var_sel,
+    radiusPixels=30,
+    opacity=0.6,
+    colorRange=palettes[var_sel]
+)
 
-        # Sélection des données pour l'année choisie
-        selected_data = ds.sel(time=str(year))
+# Scatter layer for selected indicator (circles sized by value)
+# Compute a radius column normalized to highlight values
+df['radius'] = ((df[var_sel] - df[var_sel].min()) /
+                 (df[var_sel].max() - df[var_sel].min() + 1e-6)) * 20000 + 1000
+indicator_layer = pdk.Layer(
+    'ScatterplotLayer',
+    data=df,
+    get_position=['longitude', 'latitude'],
+    get_radius='radius',
+    get_fill_color=[0, 0, 255, 140],  # semi-transparent blue
+    pickable=True
+)
 
-        # Convertir en DataFrame pour pydeck
-        df = selected_data.to_dataframe().reset_index()
+# Points HDW en rouge
+hdw_day = hdw.sel(valid_time=sel)
+df_hdw = hdw_day.where(hdw_day == 1).to_dataframe().reset_index().dropna(subset=['HDW'])
+layer_hdw = pdk.Layer(
+    'ScatterplotLayer',
+    data=df_hdw,
+    get_position=['longitude', 'latitude'],
+    get_color=[255, 0, 0, 200],
+    get_radius=15000,
+    pickable=False
+)
 
-        # Vérifiez les colonnes présentes et utilisez la bonne colonne pour les poids
-        weight_column = "precipitation" if "precipitation" in df.columns else df.columns[-1]
+# Compose layers: indicator layer first, then heatmap, then HDW points
+hdw_day = hdw.sel(valid_time=sel)
+df_hdw = hdw_day.where(hdw_day == 1).to_dataframe().reset_index().dropna(subset=['HDW'])
+layer_hdw = pdk.Layer(
+    'ScatterplotLayer',
+    data=df_hdw,
+    get_position=['longitude', 'latitudet'],
+    get_color=[255, 0, 0, 200],
+    get_radius=15000,
+    pickable=False
+)
 
-        # Couleur dynamique basée sur le thème
-        color_range = select_theme(filename)
-         
-        # Afficher l'indicateur de risque
+# Vue initiale centrée sur la zone moyenne
+avg_lat = float(df['latitude'].mean())
+avg_lon = float(df['longitude'].mean())
+view_state = pdk.ViewState(latitude=avg_lat, longitude=avg_lon, zoom=4, pitch=35)
 
-        # Création du HeatmapLayer pour pydeck
-        layer = pdk.Layer(
-            "HeatmapLayer",
-            data=df,
-            get_position=["lon", "lat"],
-            get_weight=weight_column,
-            radiusPixels=30,
-            opacity=0.4,
-            colorRange=color_range,  # Appliquer la gamme de couleurs sélectionnée
-        )
-        # Point utilisateur
-        point_layer = pdk.Layer(
-            "ScatterplotLayer",
-            data=pd.DataFrame({'lon': [longitude], 'lat': [latitude]}),
-            get_position=["lon", "lat"],
-            get_color=[255, 0, 0, 255],  #  rouge
-            get_radius=10000,  # Augmentation de la taille du point
-        )
+# Affichage pydeck
+r = pdk.Deck(
+    layers=[layer_heat, layer_hdw],
+    initial_view_state=view_state,
+    map_style='mapbox://styles/mapbox/light-v9'
+)
+st.pydeck_chart(r)
 
-        # Label affichant les coordonnées
-        label_layer = pdk.Layer(
-        "TextLayer",
-        data=pd.DataFrame({'lon': [longitude], 'lat': [latitude], 'label': [f'({longitude}, {latitude})']}),  # Le label contient les coordonnées
-        get_position=["lon", "lat"],
-        get_text="label",  # Le texte à afficher
-        get_size=15,  # Taille du texte
-        get_color=[0, 0, 0, 255],  # Couleur blanche pour le texte
-        get_alignment_baseline="'center'",  # Centrer le texte
-        )
-        # Paramètres de vue de la carte
-        view_state = pdk.ViewState(
-            latitude=50,
-            longitude=10,
-            zoom=3,
-            pitch=50,
-        )
-
-        # Créer et afficher la carte
-        r = pdk.Deck(
-            layers=[layer, point_layer],
-            initial_view_state=view_state,
-            map_style='mapbox://styles/mapbox/light-v9'
-        )
-        st.pydeck_chart(r)
-
-        # Extraire et afficher la valeur du layer à la position de l'utilisateur
-        st.write(f"**Valeur de l'indicateur à l'emplacement sélectionné ({latitude}, {longitude})**: {valeur}")
-
-        # Affichage de l'année sélectionnée et du nom du fichier
-        st.write(f"**Année sélectionnée**: {year}")
-        st.write(f"**Indicateur**: {extract_title(filename)}")
-        st.write(f"**Niveau de risque**: {risk_level} / 5")
+# Affichage des événements HDW détectés
+if not df_hdw.empty:
+    st.subheader(f"Événements HDW le {selected_date}")
+    st.dataframe(df_hdw[['valid_time', 'latitude', 'longitude']].rename(columns={'valid_time': 'date'}))
+else:
+    st.write(f"Aucun épisode HDW détecté le {selected_date}.")
