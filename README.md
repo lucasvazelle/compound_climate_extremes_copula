@@ -1,21 +1,26 @@
 # compound_climate_extremes_copula
 
-Mesure des dépendances de la chaleur, du temps sec et des vents extrêmes partout en Europe.
-Modélisation de la structure de dépendance grâce aux copules.
+Ce projet permet de mesurer des dépendances bivariés de la chaleur, du temps sec et des vents extrêmes partout en Europe.
+La modélisation de la structure de dépendance se fait avec la méthode des copules (voir fichier.pptx.pdf). 
 
-**Installer les dépendances**
+**Etape préliminaire**
+
+Installer python 3.10 ou 3.11
+
+**Etape 1 Installer les dépendances**
 
 pip install -r requierments.txt
 
 **Modifier main.py selon vos paramètres**
 
-importeur1 = ImportData().import_dry() # choisir les données que vous voulez disponible dans import_data.py
-importeur2 = ImportData().import_wind() # choisir les données que vous voulez disponible dans import_data.py
-nom_variable1 = "dry" # adaptez selon la donnée choisie
-nom_variable2 = "wind" # adaptez selon la donnée choisie
-lat, lon = 26, 36  # choisir une localisation
+lat_sel, lon_sel = 50, 2 # chosir respectivement la latitude et longitude
+ds1 = dry                       # choisir parmi hot, dry et wind
+ds2 = hot                       # choisir parmi hot, dry et wind
+nom_de_la_variable_1 = "dry %"    # à adapter
+nom_de_la_variable_2 = "hot degrés"   # à adapter
+
 
 **Lancer l'analyse**
-python main.py
+$python main.py
 
 Les résultats apparaitrons dans output/ et dans le log

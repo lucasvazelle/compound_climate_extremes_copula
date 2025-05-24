@@ -152,7 +152,6 @@ class AnalyseurCopule:
         titre = (
             f"Copule sélectionnée : {self.nom_copule} | "
             f"Paramètre θ = {theta_display} | "
-            f"Tau de Kendall = {tau_display}"
         )
 
         plt.title(titre)
